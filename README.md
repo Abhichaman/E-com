@@ -20,7 +20,7 @@ SpringBoot-Reactjs-Ecommerce-main/
 
 ### 🔧 Technologies Used
 
-* Java 17+
+* Java 21
 * Spring Boot
 * Spring Data JPA
 * MySQL (can be adapted)
