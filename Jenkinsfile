@@ -1,12 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven-3.9'
-        nodejs 'NodeJS-18'
-        jdk 'JDK-21'
-    }
-
     stages {
         stage('Checkout') {
             steps {
@@ -34,7 +28,6 @@ pipeline {
         stage('Deploy via Docker Compose') {
             steps {
                 sh '''
-                    # Stop existing containers, build images with fresh artifacts, and start stack
                     docker compose down
                     docker compose build --no-cache
                     docker compose up -d
@@ -45,9 +38,7 @@ pipeline {
         stage('Verify Database Health & Schema') {
             steps {
                 sh '''
-                    echo "Waiting for services to settle..."
                     sleep 5
-                    # Ensure image_date column is LONGBLOB
                     docker compose exec -T mysql mysql -u root -proot ecomdb -e "ALTER TABLE product MODIFY COLUMN image_date LONGBLOB;" || true
                 '''
             }
@@ -59,7 +50,7 @@ pipeline {
             echo "Project deployed successfully on port 80!"
         }
         failure {
-            echo "Deployment failed. Inspect Jenkins console output."
+            echo "Deployment failed. Check Jenkins console output."
         }
         always {
             cleanWs notFailBuild: true, deleteDirs: true
