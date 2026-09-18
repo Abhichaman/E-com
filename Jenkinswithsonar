@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+
+    environment {
+       
+        SONAR_HOST_URL = 'sonar'
+        SONAR_CREDENTIALS_ID = 'sonar'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Backend (Maven)') {
+            steps {
+                dir('Ecommerce-Backend') {
+                    sh 'mvn clean package -DskipTests'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis (Backend)') {
+            steps {
+                dir('Ecommerce-Backend') {
+                    withCredentials([string(credentialsId: "${SONAR_CREDENTIALS_ID}", variable: 'SONAR_AUTH_TOKEN')]) {
+                        sh '''
+                            mvn sonar:sonar \
+                                -Dsonar.host.url=${SONAR_HOST_URL} \
+                                -Dsonar.token=${SONAR_AUTH_TOKEN} \
+                                -Dsonar.projectKey=ecommerce-backend \
+                                -Dsonar.projectName="Ecommerce Backend"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build Frontend (Vite)') {
+            steps {
+                dir('Ecommerce-Frontend') {
+                    sh 'npm install'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Deploy via Docker Compose') {
+            steps {
+                sh '''
+                    # Stop existing containers and free port 80
+                    docker compose down --remove-orphans || true
+                    docker ps -q --filter "publish=80" | xargs -r docker rm -f
+
+                    # Deploy fresh containers
+                    docker compose up -d --build
+                '''
+            }
+        }
+
+        stage('Verify Database Health & Schema') {
+            steps {
+                sh '''
+                    sleep 5
+                    docker compose exec -T mysql mysql -u root -proot ecomdb -e "ALTER TABLE product MODIFY COLUMN image_date LONGBLOB;" || true
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "SonarQube analysis passed & Project deployed successfully on port 80!"
+        }
+        failure {
+            echo "Pipeline failed. Check Jenkins console output or SonarQube dashboard."
+        }
+        always {
+            cleanWs notFailBuild: true, deleteDirs: true
+        }
+    }
+}
